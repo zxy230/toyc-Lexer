@@ -15,8 +15,4 @@ CTestTestfile.cmake
 *.swp
 *.swo
 
-Lexer-cpp.md
-Lexer-h.md
-main-cpp.md
-
 toy-lexer
