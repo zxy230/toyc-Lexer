@@ -113,7 +113,7 @@ Token Lexer::readNextToken()
     {
         return readIdentifier();
     }
-    else if (isDigit(c) || (c == '-' && isDigit(peek())))
+    else if (isDigit(c))
     {
         return readNumber();
     }
@@ -164,28 +164,15 @@ Token Lexer::readNumber()
     int startCol = col;
     std::string value;
 
-    // 处理可能的负号
-    if (current() == '-')
-    {
-        value += current();
-        advance();
-    }
-
     // 读取数字部分
     if (current() == '0')
     {
         value += current();
         advance();
-        // 不允许前导0（除非就是0本身）
-        if (!isAtEnd() && isDigit(current()))
+        while (!isAtEnd() && isDigit(current()))
         {
-            // 错误：前导0
-            // 这里可以添加错误处理，暂时先继续读取
-            while (!isAtEnd() && isDigit(current()))
-            {
-                value += current();
-                advance();
-            }
+            value += current();
+            advance();
         }
     }
     else
