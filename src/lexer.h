@@ -48,6 +48,7 @@ enum class TokenType
 
     UNKNOWN
 };
+
 // Token结构体
 struct Token
 {
@@ -67,10 +68,9 @@ public:
 
 private:
     std::string input;
-    size_t pos;     // 当前位置
-    int line;       // 当前行号
-    int col;        // 当前列号
-    int tokenCount; // token计数器
+    size_t pos; // 当前位置
+    int line;   // 当前行号
+    int col;    // 当前列号
 
     Token readNextToken();
     Token readIdentifier();

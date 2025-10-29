@@ -25,12 +25,11 @@ int main()
         Lexer lexer(input);
         auto tokens = lexer.tokenize();
 
-        size_t index = 0;
         // 输出token流
-        for (const auto &token : tokens)
+        for (size_t i = 0; i < tokens.size(); i++)
         {
-            std::cout << index << ":" << tokenTypeToString(token.type) << ":\"" << token.value << "\"" << std::endl;
-            index++;
+            const auto &token = tokens[i];
+            std::cout << i << ":" << tokenTypeToString(token.type) << ":\"" << token.value << "\"" << std::endl;
         }
     }
     catch (const std::exception &e)

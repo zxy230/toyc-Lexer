@@ -123,6 +123,196 @@ Token Lexer::readNextToken()
     }
 }
 
+Token Lexer::readIdentifier()
+{
+    int startLine = line;
+    int startCol = col;
+    std::string value;
+
+    // 读取完整的标识符
+    while (!isAtEnd() && isIdentifierPart(current()))
+    {
+        value += current();
+        advance();
+    }
+
+    // 检查是否是关键字
+    TokenType type = TokenType::IDENTIFIER;
+    if (value == "int")
+        type = TokenType::KEYWORD_INT;
+    else if (value == "void")
+        type = TokenType::KEYWORD_VOID;
+    else if (value == "if")
+        type = TokenType::KEYWORD_IF;
+    else if (value == "else")
+        type = TokenType::KEYWORD_ELSE;
+    else if (value == "while")
+        type = TokenType::KEYWORD_WHILE;
+    else if (value == "break")
+        type = TokenType::KEYWORD_BREAK;
+    else if (value == "continue")
+        type = TokenType::KEYWORD_CONTINUE;
+    else if (value == "return")
+        type = TokenType::KEYWORD_RETURN;
+
+    return Token{0, type, value, startLine, startCol};
+}
+
+Token Lexer::readNumber()
+{
+    int startLine = line;
+    int startCol = col;
+    std::string value;
+
+    // 处理可能的负号
+    if (current() == '-')
+    {
+        value += current();
+        advance();
+    }
+
+    // 读取数字部分
+    if (current() == '0')
+    {
+        value += current();
+        advance();
+        // 不允许前导0（除非就是0本身）
+        if (!isAtEnd() && isDigit(current()))
+        {
+            // 错误：前导0
+            // 这里可以添加错误处理，暂时先继续读取
+            while (!isAtEnd() && isDigit(current()))
+            {
+                value += current();
+                advance();
+            }
+        }
+    }
+    else
+    {
+        // 读取非零数字
+        while (!isAtEnd() && isDigit(current()))
+        {
+            value += current();
+            advance();
+        }
+    }
+
+    return Token{0, TokenType::INT_CONST, value, startLine, startCol};
+}
+
+Token Lexer::readOperator()
+{
+    int startLine = line;
+    int startCol = col;
+    char c = current();
+    advance();
+
+    TokenType type = TokenType::UNKNOWN;
+    std::string value(1, c);
+
+    // 处理多字符运算符
+    switch (c)
+    {
+    case '=':
+        if (match('='))
+        {
+            type = TokenType::EQUALS;
+            value = "==";
+        }
+        else
+        {
+            type = TokenType::ASSIGN;
+        }
+        break;
+    case '!':
+        if (match('='))
+        {
+            type = TokenType::NOT_EQUALS;
+            value = "!=";
+        }
+        else
+        {
+            type = TokenType::NOT;
+        }
+        break;
+    case '<':
+        if (match('='))
+        {
+            type = TokenType::LESS_EQUAL;
+            value = "<=";
+        }
+        else
+        {
+            type = TokenType::LESS;
+        }
+        break;
+    case '>':
+        if (match('='))
+        {
+            type = TokenType::GREATER_EQUAL;
+            value = ">=";
+        }
+        else
+        {
+            type = TokenType::GREATER;
+        }
+        break;
+    case '&':
+        if (match('&'))
+        {
+            type = TokenType::AND;
+            value = "&&";
+        }
+        break;
+    case '|':
+        if (match('|'))
+        {
+            type = TokenType::OR;
+            value = "||";
+        }
+        break;
+    case '+':
+        type = TokenType::PLUS;
+        break;
+    case '-':
+        type = TokenType::MINUS;
+        break;
+    case '*':
+        type = TokenType::MULTIPLY;
+        break;
+    case '/':
+        type = TokenType::DIVIDE;
+        break;
+    case '%':
+        type = TokenType::MODULO;
+        break;
+    case '(':
+        type = TokenType::LEFT_PAREN;
+        break;
+    case ')':
+        type = TokenType::RIGHT_PAREN;
+        break;
+    case '{':
+        type = TokenType::LEFT_BRACE;
+        break;
+    case '}':
+        type = TokenType::RIGHT_BRACE;
+        break;
+    case ';':
+        type = TokenType::SEMICOLON;
+        break;
+    case ',':
+        type = TokenType::COMMA;
+        break;
+    default:
+        // 未知字符，保持UNKNOWN类型
+        break;
+    }
+
+    return Token{0, type, value, startLine, startCol};
+}
+
 // 获取当前字符
 char Lexer::current() const
 {
