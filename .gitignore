@@ -14,9 +14,8 @@ CTestTestfile.cmake
 .idea/
 *.swp
 *.swo
+.env
 
-Lexer-cpp.md
-Lexer-h.md
-main-cpp.md
+README.md
 
 toy-lexer

@@ -16,3 +16,12 @@ cat sample.c | docker run -i toy-lexer
 ## 重定向测试
 docker run -i toy-lexer < sample.c
 
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+
+1. 关键字：int, void, if, else, while, break, continue, return
+2. 标识符：变量名、函数名等
+3. 整数常量：数字字面值
+4. 运算符：+, -, *, /, %, =, ==, !=, <, >, <=, >=, &&, ||, !
+5. 分隔符：(, ), {, }, ;, ,
