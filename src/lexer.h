@@ -91,7 +91,6 @@ private:
 
     // 跳过无关内容
     void skipWhitespace();
-    void skipComment();
 };
 
 std::string tokenTypeToString(TokenType type);

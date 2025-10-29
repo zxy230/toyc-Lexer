@@ -379,45 +379,39 @@ void Lexer::skipWhitespace()
         }
         else if (c == '/')
         {
-            // 可能是注释开始
-            if (peek() == '/' || peek() == '*')
+            char next = peek();
+            if (next == '/') // 单行注释
             {
-                skipComment();
+                advance(); // 跳过 '/'
+                advance(); // 跳过 '/'
+                while (!isAtEnd() && current() != '\n')
+                {
+                    advance();
+                }
+            }
+            else if (next == '*') // 多行注释
+            {
+                advance(); // 跳过 '/'
+                advance(); // 跳过 '*'
+                while (!isAtEnd())
+                {
+                    if (current() == '*' && peek() == '/')
+                    {
+                        advance(); // 跳过 '*'
+                        advance(); // 跳过 '/'
+                        break;
+                    }
+                    advance();
+                }
             }
             else
             {
-                break;
+                break; // 只是一个除号 '/'
             }
         }
         else
         {
             break;
-        }
-    }
-}
-
-void Lexer::skipComment()
-{
-    if (match('/'))
-    {
-        // 单行注释：跳过直到行尾
-        while (!isAtEnd() && current() != '\n')
-        {
-            advance();
-        }
-    }
-    else if (match('*'))
-    {
-        // 多行注释：跳过直到 */
-        while (!isAtEnd())
-        {
-            if (current() == '*' && peek() == '/')
-            {
-                advance(); // 跳过 *
-                advance(); // 跳过 /
-                break;
-            }
-            advance();
         }
     }
 }
