@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include <cctype>
+#include <iostream>
 
 std::string tokenTypeToString(TokenType type)
 {
@@ -318,7 +319,18 @@ void Lexer::advance()
 {
     if (!isAtEnd())
     {
-        if (current() == '\n')
+        char c = current();
+        if (c == '\r')
+        {
+            // 处理Windows换行符\r\n
+            if (peek() == '\n')
+            {
+                pos++; // 跳过\n
+            }
+            line++;
+            col = 1;
+        }
+        else if (c == '\n')
         {
             line++;
             col = 1;
