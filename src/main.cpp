@@ -1,80 +1,64 @@
+// #include "parser.h"
+// #include <iostream>
+// #include <string>
+// #include <sstream>
+
+// int main()
+// {
+//     std::string input;
+//     std::string line;
+
+//     while (std::getline(std::cin, line))
+//     {
+//         input += line + "\n";
+//     }
+
+//     Parser parser(input);
+//     parser.parse();
+//     parser.printErrors();
+
+//     return 0;
+// }
+
+#include "parser.h"
+#include "lexer.h"
 #include <iostream>
 #include <string>
 #include <sstream>
-#include <algorithm>
-#include <unordered_set>
-#include <vector>
-#include "lexer.h"
-#include "parser.h"
-
-std::string readInput()
-{
-    std::ostringstream buffer;
-    buffer << std::cin.rdbuf();
-    return buffer.str();
-}
 
 int main()
 {
-    try
+    std::stringstream buffer;
+    buffer << std::cin.rdbuf();
+    std::string sourceCode = buffer.str();
+
+    Lexer lexer(sourceCode);
+    std::vector<Token> tokens = lexer.getAllTokens();
+
+    bool hasLexicalError = false;
+    std::set<int> errorLines;
+    for (const auto &token : tokens)
     {
-        std::string input = readInput();
-
-        if (input.empty())
+        if (token.type == TokenType::UNKNOWN)
         {
-            std::cout << "reject" << std::endl;
-            std::cout << "1" << std::endl;
-            return 0;
-        }
-
-        // 词法分析
-        Lexer lexer(input);
-        auto tokens = lexer.tokenize();
-
-        // 移除UNKNOWN token（如果有）
-        tokens.erase(
-            std::remove_if(tokens.begin(), tokens.end(),
-                           [](const Token &token)
-                           { return token.type == TokenType::UNKNOWN; }),
-            tokens.end());
-
-        if (tokens.empty())
-        {
-            std::cout << "reject" << std::endl;
-            std::cout << "1" << std::endl;
-            return 0;
-        }
-
-        // 语法分析
-        Parser parser(tokens);
-        bool success = parser.parse();
-
-        if (success)
-        {
-            std::cout << "accept" << std::endl;
-        }
-        else
-        {
-            std::cout << "reject" << std::endl;
-            const auto &errors = parser.getErrors();
-
-            // 按行号升序排序并去重
-            std::vector<int> sortedErrors = errors;
-            std::sort(sortedErrors.begin(), sortedErrors.end());
-            auto last = std::unique(sortedErrors.begin(), sortedErrors.end());
-            sortedErrors.erase(last, sortedErrors.end());
-
-            for (int line : sortedErrors)
-            {
-                std::cout << line << std::endl;
-            }
+            hasLexicalError = true;
+            errorLines.insert(token.line);
         }
     }
-    catch (const std::exception &e)
+
+    if (hasLexicalError)
     {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
+        std::cout << "reject" << std::endl;
+        for (int line : errorLines)
+        {
+            std::cout << line << std::endl;
+        }
+        return 0;
     }
+
+    Parser parser(std::move(tokens));
+    parser.parse();
+    parser.printErrors();
 
     return 0;
 }

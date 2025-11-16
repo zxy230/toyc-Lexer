@@ -1,46 +1,34 @@
 #include "parser.h"
 #include <iostream>
-#include <unordered_set>
+#include <algorithm>
 
-Parser::Parser(const std::vector<Token> &tokens)
-    : tokens_(tokens), current_(0) {}
-
-bool Parser::parse()
+Parser::Parser(std::vector<Token> tokens)
+    : m_tokens(std::move(tokens)),
+      m_index(0),
+      hasMain(false)
 {
-    parseCompUnit();
-    return errors_.empty();
 }
 
-const Token &Parser::currentToken() const
+Token Parser::current() const
 {
-    if (current_ >= tokens_.size())
-    {
-        static Token endToken{0, TokenType::UNKNOWN, "", -1, -1};
-        return endToken;
-    }
-    return tokens_[current_];
+    return m_tokens[m_index];
 }
 
-const Token &Parser::peek(int offset) const
+Token Parser::previous() const
 {
-    static Token endToken{0, TokenType::UNKNOWN, "", -1, -1};
-    if (current_ + offset >= tokens_.size())
-    {
-        return endToken;
-    }
-    return tokens_[current_ + offset];
+    return m_tokens[m_index - 1];
 }
 
 bool Parser::isAtEnd() const
 {
-    return current_ >= tokens_.size();
+    return m_tokens[m_index].type == TokenType::END_OF_FILE;
 }
 
 void Parser::advance()
 {
     if (!isAtEnd())
     {
-        current_++;
+        m_index++;
     }
 }
 
@@ -48,7 +36,7 @@ bool Parser::check(TokenType type) const
 {
     if (isAtEnd())
         return false;
-    return currentToken().type == type;
+    return current().type == type;
 }
 
 bool Parser::match(TokenType type)
@@ -61,462 +49,443 @@ bool Parser::match(TokenType type)
     return false;
 }
 
-bool Parser::consume(TokenType type, const std::string &errorMsg)
+void Parser::reportError(const std::string &msg)
+{
+    const int errorLine = current().line;
+
+    bool exists = std::any_of(m_errors.begin(), m_errors.end(),
+                              [errorLine](const ErrorInfo &e)
+                              { return e.line == errorLine; });
+
+    if (!exists)
+    {
+        m_errors.emplace_back(errorLine, msg);
+    }
+
+    throw ParseError{};
+}
+
+void Parser::requireToken(TokenType type, const std::string &expected)
 {
     if (match(type))
     {
-        return true;
+        return;
     }
-
-    reportError(currentToken());
-    return false;
+    reportError("Expected " + expected + ", but got '" + current().value + "'");
 }
 
-void Parser::synchronize()
+void Parser::recoverToStatement()
 {
-    // 同步到下一个语句或声明的开始
     while (!isAtEnd())
     {
-        // 函数定义开始
-        if ((check(TokenType::KEYWORD_INT) || check(TokenType::KEYWORD_VOID)) &&
-            peek().type == TokenType::IDENTIFIER &&
-            peek(2).type == TokenType::LEFT_PAREN)
+        if (previous().type == TokenType::SEMICOLON)
+            return;
+
+        switch (current().type)
+        {
+        case TokenType::IF:
+        case TokenType::WHILE:
+        case TokenType::RETURN:
+        case TokenType::BREAK:
+        case TokenType::CONTINUE:
+        case TokenType::INT:
+        case TokenType::VOID:
+        case TokenType::LEFT_BRACE:
+        case TokenType::RIGHT_BRACE:
+            return;
+        default:;
+        }
+        advance();
+    }
+}
+
+void Parser::recoverToFunction()
+{
+    while (!isAtEnd())
+    {
+        if (check(TokenType::INT) || check(TokenType::VOID))
         {
             return;
         }
 
-        // 语句开始
-        if (check(TokenType::SEMICOLON) ||
-            check(TokenType::LEFT_BRACE) ||
-            check(TokenType::RIGHT_BRACE) ||
-            check(TokenType::KEYWORD_IF) ||
-            check(TokenType::KEYWORD_WHILE) ||
-            check(TokenType::KEYWORD_RETURN) ||
-            check(TokenType::KEYWORD_BREAK) ||
-            check(TokenType::KEYWORD_CONTINUE) ||
-            (check(TokenType::IDENTIFIER) &&
-             (peek().type == TokenType::ASSIGN || peek().type == TokenType::LEFT_PAREN || peek().type == TokenType::SEMICOLON)) ||
-            check(TokenType::KEYWORD_INT))
+        if (check(TokenType::LEFT_BRACE))
         {
-            return;
+            advance();
+            int braceDepth = 1;
+            while (!isAtEnd() && braceDepth > 0)
+            {
+                if (match(TokenType::LEFT_BRACE))
+                    braceDepth++;
+                else if (match(TokenType::RIGHT_BRACE))
+                    braceDepth--;
+                else
+                    advance();
+            }
+            continue;
         }
 
         advance();
     }
 }
-
-void Parser::reportError(const Token &token)
+bool Parser::parse()
 {
-    // 避免重复报告同一行的错误
-    if (reportedLines_.find(token.line) != reportedLines_.end())
+    try
     {
-        return;
+        analyzeProgram();
     }
-
-    errors_.push_back(token.line);
-    reportedLines_.insert(token.line);
-    synchronize();
+    catch (const ParseError &)
+    {
+    }
+    return m_errors.empty();
 }
 
-// CompUnit → FuncDef+
-void Parser::parseCompUnit()
+void Parser::analyzeProgram()
 {
     if (isAtEnd())
     {
-        reportError(currentToken());
-        return;
+        reportError("Empty program");
     }
 
-    bool hasMain = false;
-    while (!isAtEnd() && (check(TokenType::KEYWORD_INT) || check(TokenType::KEYWORD_VOID)))
+    while (!isAtEnd())
     {
-        int funcLine = currentToken().line;
-        parseFuncDef();
-
-        // 检查是否是main函数
-        if (funcLine == currentToken().line - 1)
+        try
         {
-            // 可能是main函数
-            for (int i = current_ - 1; i >= 0 && i > current_ - 10; i--)
-            {
-                if (tokens_[i].type == TokenType::IDENTIFIER && tokens_[i].value == "main")
-                {
-                    hasMain = true;
-                    break;
-                }
-            }
+            analyzeFunction();
+        }
+        catch (const ParseError &)
+        {
+            recoverToFunction();
         }
     }
 
-    // 检查是否还有未处理的token
-    if (!isAtEnd())
+    if (!hasMain && m_errors.empty())
     {
-        reportError(currentToken());
+        m_errors.emplace_back(1, "Missing main function");
     }
 }
 
-// FuncDef → ("int" | "void") ID "(" (Param ("," Param)*)? ")" Block
-void Parser::parseFuncDef()
+void Parser::analyzeFunction()
 {
-    // 返回类型
-    if (!match(TokenType::KEYWORD_INT) && !match(TokenType::KEYWORD_VOID))
+    if (!check(TokenType::INT) && !check(TokenType::VOID))
     {
-        reportError(currentToken());
-        synchronize();
-        return;
+        reportError("Expected 'int' or 'void' at function start");
+    }
+    advance();
+
+    requireToken(TokenType::IDENTIFIER, "function name");
+    const std::string funcName = previous().value;
+
+    if (funcName == "main")
+    {
+        hasMain = true;
     }
 
-    // 函数名
-    if (!match(TokenType::IDENTIFIER))
+    if (functionNames.count(funcName))
     {
-        reportError(currentToken());
-        synchronize();
-        return;
-    }
-
-    // 左括号
-    if (!match(TokenType::LEFT_PAREN))
-    {
-        reportError(currentToken());
-        // 尝试同步到右括号或左大括号
-        while (!isAtEnd() && !check(TokenType::RIGHT_PAREN) && !check(TokenType::LEFT_BRACE))
-        {
-            advance();
-        }
-    }
-
-    // 参数列表（可选）
-    if (check(TokenType::KEYWORD_INT))
-    {
-        parseParam();
-
-        // 更多参数
-        while (match(TokenType::COMMA))
-        {
-            if (check(TokenType::RIGHT_PAREN))
-            {
-                // 逗号后直接是右括号，参数缺失
-                reportError(currentToken());
-                break;
-            }
-            parseParam();
-        }
-    }
-
-    // 右括号
-    if (!match(TokenType::RIGHT_PAREN))
-    {
-        reportError(currentToken());
-        // 尝试同步到左大括号
-        while (!isAtEnd() && !check(TokenType::LEFT_BRACE))
-        {
-            advance();
-        }
-    }
-
-    // 函数体
-    if (check(TokenType::LEFT_BRACE))
-    {
-        parseBlock();
+        reportError("Duplicate function name");
     }
     else
     {
-        reportError(currentToken());
-        synchronize();
+        functionNames.insert(funcName);
     }
+
+    requireToken(TokenType::LEFT_PAREN, "(");
+    analyzeParameters();
+    requireToken(TokenType::RIGHT_PAREN, ")");
+    analyzeCodeBlock();
 }
 
-// Param → "int" ID
-void Parser::parseParam()
+void Parser::analyzeParameters()
 {
-    if (!match(TokenType::KEYWORD_INT))
+    if (check(TokenType::RIGHT_PAREN))
     {
-        reportError(currentToken());
-        return;
-    }
-    if (!match(TokenType::IDENTIFIER))
-    {
-        reportError(currentToken());
-    }
-}
-
-// Block → "{" Stmt* "}"
-void Parser::parseBlock()
-{
-    if (!match(TokenType::LEFT_BRACE))
-    {
-        reportError(currentToken());
         return;
     }
 
-    while (!isAtEnd() && !check(TokenType::RIGHT_BRACE))
+    if (check(TokenType::COMMA))
     {
-        parseStmt();
+        reportError("Expected parameter, not comma");
     }
 
-    if (!match(TokenType::RIGHT_BRACE))
+    do
     {
-        reportError(currentToken());
-        // 尝试同步到下一个函数定义
-        synchronize();
-    }
+        analyzeSingleParam();
+    } while (match(TokenType::COMMA));
 }
 
-// Stmt → Block | ";" | Expr ";" | ID "=" Expr ";"
-//        | "int" ID "=" Expr ";"
-//        | "if" "(" Expr ")" Stmt ("else" Stmt)?
-//        | "while" "(" Expr ")" Stmt
-//        | "break" ";" | "continue" ";" | "return" Expr ";"
-void Parser::parseStmt()
+void Parser::analyzeSingleParam()
 {
-    if (match(TokenType::LEFT_BRACE))
+    requireToken(TokenType::INT, "parameter type 'int'");
+    requireToken(TokenType::IDENTIFIER, "parameter name");
+}
+
+void Parser::analyzeCodeBlock()
+{
+    requireToken(TokenType::LEFT_BRACE, "{");
+
+    while (!check(TokenType::RIGHT_BRACE) && !isAtEnd())
     {
-        // Block
-        parseBlock();
+        try
+        {
+            analyzeStatement();
+        }
+        catch (const ParseError &)
+        {
+            recoverToStatement();
+        }
+    }
+
+    requireToken(TokenType::RIGHT_BRACE, "}");
+}
+
+// *** 这是修复后的函数 ***
+void Parser::analyzeStatement()
+{
+    if (check(TokenType::LEFT_BRACE))
+    {
+        analyzeCodeBlock();
     }
     else if (match(TokenType::SEMICOLON))
     {
         // 空语句
-        return;
     }
-    else if (match(TokenType::KEYWORD_INT))
+    else if (check(TokenType::INT))
     {
-        // 变量声明: "int" ID "=" Expr ";"
-        if (!match(TokenType::IDENTIFIER))
-        {
-            reportError(currentToken());
-            synchronize();
-            return;
-        }
-        if (!match(TokenType::ASSIGN))
-        {
-            reportError(currentToken());
-            synchronize();
-            return;
-        }
-        parseExpr();
-        if (!match(TokenType::SEMICOLON))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
+        analyzeVariableDeclaration();
     }
-    else if (match(TokenType::KEYWORD_IF))
+    else if (check(TokenType::IDENTIFIER))
     {
-        // if语句
-        if (!match(TokenType::LEFT_PAREN))
-        {
-            reportError(currentToken());
-        }
-        parseExpr();
-        if (!match(TokenType::RIGHT_PAREN))
-        {
-            reportError(currentToken());
-        }
-        parseStmt();
-
-        if (match(TokenType::KEYWORD_ELSE))
-        {
-            parseStmt();
-        }
+        analyzeAssignmentOrCall();
     }
-    else if (match(TokenType::KEYWORD_WHILE))
+    else if (check(TokenType::IF))
     {
-        // while语句
-        if (!match(TokenType::LEFT_PAREN))
-        {
-            reportError(currentToken());
-        }
-        parseExpr();
-        if (!match(TokenType::RIGHT_PAREN))
-        {
-            reportError(currentToken());
-        }
-        parseStmt();
+        analyzeConditional();
     }
-    else if (match(TokenType::KEYWORD_BREAK))
+    else if (check(TokenType::WHILE))
     {
-        if (!match(TokenType::SEMICOLON))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
+        analyzeLoop();
     }
-    else if (match(TokenType::KEYWORD_CONTINUE))
+    else if (check(TokenType::BREAK) || check(TokenType::CONTINUE))
     {
-        if (!match(TokenType::SEMICOLON))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
+        analyzeJumpStatement();
     }
-    else if (match(TokenType::KEYWORD_RETURN))
+    else if (check(TokenType::RETURN))
     {
-        // 检查是否有表达式
-        if (!check(TokenType::SEMICOLON))
-        {
-            parseExpr();
-        }
-        if (!match(TokenType::SEMICOLON))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
+        advance(); // 消耗 'return'
+        analyzeExpression();
+        requireToken(TokenType::SEMICOLON, ";");
     }
-    else if (check(TokenType::IDENTIFIER) && peek().type == TokenType::ASSIGN)
+    else if (check(TokenType::ELSE))
     {
-        // 赋值语句: ID "=" Expr ";"
-        advance(); // 消费ID
-        advance(); // 消费"="
-        parseExpr();
-        if (!match(TokenType::SEMICOLON))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
-    }
-    else if (check(TokenType::IDENTIFIER) && peek().type == TokenType::LEFT_PAREN)
-    {
-        // 函数调用: ID "(" ... ")"
-        parseExpr();
-        if (!match(TokenType::SEMICOLON))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
+        reportError("Stray 'else' without 'if'");
+        advance(); // 消耗 else 以便恢复
     }
     else
     {
-        // 表达式语句: Expr ";"
-        parseExpr();
-        if (!match(TokenType::SEMICOLON))
+        analyzeExpression();
+        requireToken(TokenType::SEMICOLON, ";");
+    }
+}
+
+void Parser::analyzeVariableDeclaration()
+{
+    advance(); // 消耗 'int'
+    do
+    {
+        requireToken(TokenType::IDENTIFIER, "variable name");
+        if (match(TokenType::ASSIGN))
         {
-            reportError(currentToken());
-            synchronize();
+            if (check(TokenType::SEMICOLON) || check(TokenType::COMMA))
+            {
+                reportError("Missing expression after '='");
+            }
+            analyzeExpression();
         }
-    }
-}
-
-void Parser::parseExpr()
-{
-    parseLOrExpr();
-}
-
-// LOrExpr → LAndExpr | LOrExpr "||" LAndExpr
-void Parser::parseLOrExpr()
-{
-    parseLAndExpr();
-    while (match(TokenType::OR))
-    {
-        parseLAndExpr();
-    }
-}
-
-// LAndExpr → RelExpr | LAndExpr "&&" RelExpr
-void Parser::parseLAndExpr()
-{
-    parseRelExpr();
-    while (match(TokenType::AND))
-    {
-        parseRelExpr();
-    }
-}
-
-// RelExpr → AddExpr | RelExpr ("<" | ">" | "<=" | ">=" | "==" | "!=") AddExpr
-void Parser::parseRelExpr()
-{
-    parseAddExpr();
-    while (check(TokenType::LESS) || check(TokenType::GREATER) ||
-           check(TokenType::LESS_EQUAL) || check(TokenType::GREATER_EQUAL) ||
-           check(TokenType::EQUALS) || check(TokenType::NOT_EQUALS))
-    {
-        advance(); // 消费运算符
-        parseAddExpr();
-    }
-}
-
-// AddExpr → MulExpr | AddExpr ("+" | "-") MulExpr
-void Parser::parseAddExpr()
-{
-    parseMulExpr();
-    while (check(TokenType::PLUS) || check(TokenType::MINUS))
-    {
-        advance(); // 消费运算符
-        parseMulExpr();
-    }
-}
-
-// MulExpr → UnaryExpr | MulExpr ("*" | "/" | "%") UnaryExpr
-void Parser::parseMulExpr()
-{
-    parseUnaryExpr();
-    while (check(TokenType::MULTIPLY) || check(TokenType::DIVIDE) || check(TokenType::MODULO))
-    {
-        advance(); // 消费运算符
-        parseUnaryExpr();
-    }
-}
-
-// UnaryExpr → PrimaryExpr | ("+" | "-" | "!") UnaryExpr
-void Parser::parseUnaryExpr()
-{
-    if (match(TokenType::PLUS) || match(TokenType::MINUS) || match(TokenType::NOT))
-    {
-        parseUnaryExpr();
-    }
-    else
-    {
-        parsePrimaryExpr();
-    }
-}
-
-// PrimaryExpr → ID | NUMBER | "(" Expr ")" | ID "(" (Expr ("," Expr)*)? ")"
-void Parser::parsePrimaryExpr()
-{
-    if (match(TokenType::IDENTIFIER))
-    {
-        // 可能是函数调用或普通标识符
-        if (match(TokenType::LEFT_PAREN))
+        if (!check(TokenType::COMMA))
+            break;
+        advance();
+        if (check(TokenType::SEMICOLON))
         {
-            // 函数调用
-            if (!check(TokenType::RIGHT_PAREN))
-            {
-                parseExpr();
-                while (match(TokenType::COMMA))
-                {
-                    if (check(TokenType::RIGHT_PAREN))
-                    {
-                        // 逗号后直接是右括号，参数缺失
-                        reportError(currentToken());
-                        break;
-                    }
-                    parseExpr();
-                }
-            }
-            if (!match(TokenType::RIGHT_PAREN))
-            {
-                reportError(currentToken());
-                synchronize();
-            }
+            reportError("Missing variable name after ','");
         }
-        // 否则就是普通标识符，已经消费过了
-    }
-    else if (match(TokenType::INT_CONST))
+    } while (true);
+    requireToken(TokenType::SEMICOLON, ";");
+}
+
+void Parser::analyzeAssignmentOrCall()
+{
+    advance(); // 消耗 'identifier'
+    Token idToken = previous();
+
+    if (match(TokenType::ASSIGN))
     {
-        // 整数常量，已经消费过了
+        analyzeExpression();
+        requireToken(TokenType::SEMICOLON, ";");
     }
     else if (match(TokenType::LEFT_PAREN))
     {
-        parseExpr();
-        if (!match(TokenType::RIGHT_PAREN))
-        {
-            reportError(currentToken());
-            synchronize();
-        }
+        analyzeFunctionArguments();
+        requireToken(TokenType::RIGHT_PAREN, ")");
+        requireToken(TokenType::SEMICOLON, ";");
     }
     else
     {
-        reportError(currentToken());
-        synchronize();
+        reportError("Expected '=' or '(' after identifier '" + idToken.value + "'");
+    }
+}
+
+void Parser::analyzeConditional()
+{
+    advance(); // 消耗 'if'
+    requireToken(TokenType::LEFT_PAREN, "(");
+    analyzeExpression();
+    requireToken(TokenType::RIGHT_PAREN, ")");
+    analyzeStatement();
+    if (match(TokenType::ELSE))
+    {
+        analyzeStatement();
+    }
+}
+
+void Parser::analyzeLoop()
+{
+    advance(); // 消耗 'while'
+    requireToken(TokenType::LEFT_PAREN, "(");
+    analyzeExpression();
+    requireToken(TokenType::RIGHT_PAREN, ")");
+    analyzeStatement();
+}
+
+void Parser::analyzeJumpStatement()
+{
+    advance(); // 消耗 'break' 或 'continue'
+    requireToken(TokenType::SEMICOLON, ";");
+}
+
+void Parser::analyzeFunctionArguments()
+{
+    if (check(TokenType::RIGHT_PAREN))
+        return;
+    if (check(TokenType::COMMA))
+        reportError("Missing argument");
+    do
+    {
+        analyzeExpression();
+    } while (match(TokenType::COMMA));
+}
+
+void Parser::analyzeExpression()
+{
+    analyzeLogicalOr();
+}
+
+void Parser::analyzeLogicalOr()
+{
+    analyzeLogicalAnd();
+    while (match(TokenType::OR))
+        analyzeLogicalAnd();
+}
+
+void Parser::analyzeLogicalAnd()
+{
+    analyzeComparison();
+    while (match(TokenType::AND))
+        analyzeComparison();
+}
+
+void Parser::analyzeComparison()
+{
+    analyzeAddition();
+    while (match(TokenType::LESS) || match(TokenType::GREATER) ||
+           match(TokenType::LESS_EQUAL) || match(TokenType::GREATER_EQUAL) ||
+           match(TokenType::EQUAL) || match(TokenType::NOT_EQUAL))
+    {
+        analyzeAddition();
+    }
+}
+
+void Parser::analyzeAddition()
+{
+    analyzeMultiplication();
+    while (match(TokenType::PLUS) || match(TokenType::MINUS))
+    {
+        if (check(TokenType::SEMICOLON) || check(TokenType::RIGHT_PAREN))
+        {
+            reportError("Missing operand");
+        }
+        analyzeMultiplication();
+    }
+}
+
+void Parser::analyzeMultiplication()
+{
+    analyzeUnary();
+    while (match(TokenType::MULTIPLY) || match(TokenType::DIVIDE) || match(TokenType::MODULO))
+    {
+        if (check(TokenType::SEMICOLON) || check(TokenType::RIGHT_PAREN))
+        {
+            reportError("Missing operand");
+        }
+        analyzeUnary();
+    }
+}
+
+void Parser::analyzeUnary()
+{
+    if (match(TokenType::PLUS) || match(TokenType::MINUS) || match(TokenType::NOT))
+    {
+        if (check(TokenType::SEMICOLON) || check(TokenType::RIGHT_PAREN))
+        {
+            reportError("Missing operand");
+        }
+        analyzeUnary();
+    }
+    else
+    {
+        analyzePrimary();
+    }
+}
+
+void Parser::analyzePrimary()
+{
+    if (match(TokenType::IDENTIFIER))
+    {
+        if (match(TokenType::LEFT_PAREN))
+        {
+            analyzeFunctionArguments();
+            requireToken(TokenType::RIGHT_PAREN, ")");
+        }
+        return;
+    }
+    if (match(TokenType::INTCONST))
+    {
+        return;
+    }
+    if (match(TokenType::LEFT_PAREN))
+    {
+        analyzeExpression();
+        requireToken(TokenType::RIGHT_PAREN, ")");
+        return;
+    }
+    reportError("Expected expression (identifier, number, or '()')");
+}
+
+void Parser::printErrors()
+{
+    if (m_errors.empty())
+    {
+        std::cout << "accept" << std::endl;
+        return;
+    }
+
+    std::cout << "reject" << std::endl;
+
+    std::set<int> printedLines;
+    for (const auto &e : m_errors)
+    {
+        if (printedLines.insert(e.line).second)
+        {
+            std::cout << e.line << std::endl;
+        }
     }
 }

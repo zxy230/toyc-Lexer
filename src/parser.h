@@ -4,47 +4,71 @@
 #include "lexer.h"
 #include <vector>
 #include <string>
+#include <set>
+#include <stdexcept>
 #include <unordered_set>
 
-// 语法分析器类
+struct ErrorInfo
+{
+    int line;
+    std::string message;
+    ErrorInfo(int l, const std::string &m) : line(l), message(m) {}
+};
+
 class Parser
 {
-public:
-    Parser(const std::vector<Token> &tokens);
-    bool parse();
-    const std::vector<int> &getErrors() const { return errors_; }
-
 private:
-    std::vector<Token> tokens_;
-    size_t current_;
-    std::vector<int> errors_;
-    std::unordered_set<int> reportedLines_;
+    std::vector<Token> m_tokens;
+    size_t m_index;
 
-    // 辅助方法
-    const Token &currentToken() const;
-    const Token &peek(int offset = 1) const;
+    std::vector<ErrorInfo> m_errors;
+    bool hasMain;
+    std::unordered_set<std::string> functionNames;
+
+    class ParseError : public std::runtime_error
+    {
+    public:
+        ParseError() : std::runtime_error("Parse Error") {}
+    };
+
+    Token current() const;
+    Token previous() const;
     bool isAtEnd() const;
     void advance();
     bool check(TokenType type) const;
     bool match(TokenType type);
-    bool consume(TokenType type, const std::string &errorMsg = "");
-    void synchronize();
-    void reportError(const Token &token);
 
-    // 递归下降解析方法
-    void parseCompUnit();
-    void parseFuncDef();
-    void parseParam();
-    void parseBlock();
-    void parseStmt();
-    void parseExpr();
-    void parseLOrExpr();
-    void parseLAndExpr();
-    void parseRelExpr();
-    void parseAddExpr();
-    void parseMulExpr();
-    void parseUnaryExpr();
-    void parsePrimaryExpr();
+    void reportError(const std::string &msg);
+    void requireToken(TokenType type, const std::string &expected);
+
+    void recoverToStatement();
+    void recoverToFunction();
+
+    void analyzeProgram();
+    void analyzeFunction();
+    void analyzeParameters();
+    void analyzeSingleParam();
+    void analyzeCodeBlock();
+    void analyzeStatement();
+    void analyzeVariableDeclaration();
+    void analyzeAssignmentOrCall();
+    void analyzeConditional();
+    void analyzeLoop();
+    void analyzeJumpStatement();
+    void analyzeFunctionArguments();
+    void analyzeExpression();
+    void analyzeLogicalOr();
+    void analyzeLogicalAnd();
+    void analyzeComparison();
+    void analyzeAddition();
+    void analyzeMultiplication();
+    void analyzeUnary();
+    void analyzePrimary();
+
+public:
+    explicit Parser(std::vector<Token> tokens);
+    bool parse();
+    void printErrors();
 };
 
 #endif

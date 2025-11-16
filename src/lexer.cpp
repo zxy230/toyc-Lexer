@@ -1,429 +1,446 @@
+// #include "lexer.h"
+// #include <cctype>
+// #include <algorithm>
+
+// Lexer::Lexer(string s) : input(std::move(s)), pos(0), tokenIndex(0), line(1)
+// {
+//     static const std::pair<string, TokenType> kw[] = {
+//         {"int", INT}, {"void", VOID}, {"if", IF}, {"else", ELSE}, {"while", WHILE}, {"break", BREAK}, {"continue", CONTINUE}, {"return", RETURN}};
+//     keywordMap.insert(std::begin(kw), std::end(kw));
+// }
+
+// bool Lexer::isAtEnd() const
+// {
+//     return pos >= static_cast<int>(input.length());
+// }
+
+// char Lexer::getChar()
+// {
+//     return isAtEnd() ? '\0' : input[pos];
+// }
+
+// char Lexer::peek()
+// {
+//     return (pos + 1 >= static_cast<int>(input.length())) ? '\0' : input[pos + 1];
+// }
+
+// void Lexer::next()
+// {
+//     if (!isAtEnd())
+//     {
+//         if (input[pos] == '\n')
+//             ++line;
+//         ++pos;
+//     }
+// }
+
+// void Lexer::skipSpace()
+// {
+//     while (!isAtEnd() && std::isspace(static_cast<unsigned char>(getChar())))
+//         next();
+// }
+
+// void Lexer::skipComments()
+// {
+//     if (getChar() != '/' || (peek() != '/' && peek() != '*'))
+//         return;
+
+//     bool isLine = (peek() == '/');
+//     next();
+//     next();
+
+//     if (isLine)
+//     {
+//         while (!isAtEnd() && getChar() != '\n')
+//             next();
+//     }
+//     else
+//     {
+//         while (!isAtEnd() && !(getChar() == '*' && peek() == '/'))
+//             next();
+//         if (!isAtEnd())
+//         {
+//             next();
+//             next();
+//         }
+//     }
+// }
+
+// Token Lexer::readNumber()
+// {
+//     const int ln = line;
+//     string num;
+
+//     if (isAtEnd() || !std::isdigit(static_cast<unsigned char>(getChar())))
+//         return createToken(UNKNOWN, "", ln);
+
+//     const char first = getChar();
+//     num += first;
+//     next();
+
+//     if (first == '0')
+//     {
+//         if (!isAtEnd() && std::isdigit(static_cast<unsigned char>(getChar())))
+//         {
+//             while (!isAtEnd() && std::isdigit(static_cast<unsigned char>(getChar())))
+//             {
+//                 num += getChar();
+//                 next();
+//             }
+//             return createToken(UNKNOWN, num, ln);
+//         }
+//         return createToken(INTCONST, num, ln);
+//     }
+
+//     while (!isAtEnd() && std::isdigit(static_cast<unsigned char>(getChar())))
+//     {
+//         num += getChar();
+//         next();
+//     }
+
+//     return createToken(INTCONST, num, ln);
+// }
+
+// Token Lexer::readId()
+// {
+//     const int ln = line;
+//     string id;
+
+//     auto valid = [](char c)
+//     {
+//         return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+//     };
+
+//     while (!isAtEnd() && valid(getChar()))
+//     {
+//         id += getChar();
+//         next();
+//     }
+
+//     auto it = keywordMap.find(id);
+//     TokenType tp = (it != keywordMap.end()) ? it->second : IDENTIFIER;
+
+//     return createToken(tp, id, ln);
+// }
+
+// Token Lexer::readOp()
+// {
+//     const int ln = line;
+//     const char c1 = getChar();
+//     next();
+
+//     if (!isAtEnd())
+//     {
+//         const char c2 = getChar();
+//         string dbl{c1, c2};
+
+//         static const std::map<string, TokenType> doubles = {
+//             {"==", EQUAL}, {"!=", NOT_EQUAL}, {"<=", LESS_EQUAL}, {">=", GREATER_EQUAL}, {"&&", AND}, {"||", OR}};
+
+//         auto fd = doubles.find(dbl);
+//         if (fd != doubles.end())
+//         {
+//             next();
+//             return createToken(fd->second, dbl, ln);
+//         }
+//     }
+
+//     static const std::map<char, TokenType> singles = {
+//         {'+', PLUS}, {'-', MINUS}, {'*', MULTIPLY}, {'/', DIVIDE}, {'%', MODULO}, {'=', ASSIGN}, {'!', NOT}, {'<', LESS}, {'>', GREATER}, {'(', LEFT_PAREN}, {')', RIGHT_PAREN}, {'{', LEFT_BRACE}, {'}', RIGHT_BRACE}, {';', SEMICOLON}, {',', COMMA}};
+
+//     auto it = singles.find(c1);
+//     TokenType tp = (it != singles.end()) ? it->second : UNKNOWN;
+
+//     return createToken(tp, string(1, c1), ln);
+// }
+
+// Token Lexer::nextToken()
+// {
+//     while (!isAtEnd())
+//     {
+//         skipSpace();
+//         if (isAtEnd())
+//             break;
+
+//         const char c = getChar();
+//         const char n = peek();
+
+//         if (c == '/' && (n == '/' || n == '*'))
+//         {
+//             skipComments();
+//             continue;
+//         }
+
+//         if (std::isdigit(static_cast<unsigned char>(c)))
+//             return readNumber();
+
+//         if (std::isalpha(static_cast<unsigned char>(c)) || c == '_')
+//             return readId();
+
+//         return readOp();
+//     }
+
+//     return createToken(END_OF_FILE, "", line);
+// }
+
+// vector<Token> Lexer::getAllTokens()
+// {
+//     vector<Token> toks;
+//     Token t;
+
+//     do
+//     {
+//         t = nextToken();
+//         toks.push_back(t);
+//     } while (t.type != END_OF_FILE);
+
+//     return toks;
+// }
+
+// void Lexer::output()
+// {
+//     auto toks = getAllTokens();
+
+//     for (const auto &t : toks)
+//     {
+//         if (t.type != END_OF_FILE)
+//         {
+//             cout << t.index << ":" << typeToStr(t.type)
+//                  << ":\"" << t.value << "\"" << endl;
+//         }
+//     }
+// }
+
+// string Lexer::typeToStr(TokenType t)
+// {
+//     static const std::map<TokenType, string> names = {
+//         {INT, "'int'"}, {VOID, "'void'"}, {IF, "'if'"}, {ELSE, "'else'"}, {WHILE, "'while'"}, {BREAK, "'break'"}, {CONTINUE, "'continue'"}, {RETURN, "'return'"}, {IDENTIFIER, "Ident"}, {INTCONST, "IntConst"}, {PLUS, "'+'"}, {MINUS, "'-'"}, {MULTIPLY, "'*'"}, {DIVIDE, "'/'"}, {MODULO, "'%'"}, {ASSIGN, "'='"}, {EQUAL, "'=='"}, {NOT_EQUAL, "'!='"}, {LESS, "'<'"}, {LESS_EQUAL, "'<='"}, {GREATER, "'>'"}, {GREATER_EQUAL, "'>='"}, {AND, "'&&'"}, {OR, "'||'"}, {NOT, "'!'"}, {LEFT_PAREN, "'('"}, {RIGHT_PAREN, "')'"}, {LEFT_BRACE, "'{'"}, {RIGHT_BRACE, "'}'"}, {SEMICOLON, "';'"}, {COMMA, "','"}, {END_OF_FILE, "EOF"}};
+
+//     auto it = names.find(t);
+//     return (it != names.end()) ? it->second : "UNKNOWN";
+// }
+
+// Token Lexer::createToken(TokenType type, const string &val, int startLine)
+// {
+//     return Token(type, val, tokenIndex++, startLine);
+// }
+
 #include "lexer.h"
 #include <cctype>
-#include <iostream>
+#include <map>
+#include <algorithm>
 
-std::string tokenTypeToString(TokenType type)
+Lexer::Lexer(string source)
+    : m_source(std::move(source)),
+      m_pos(0),
+      m_tokenIdCounter(0),
+      m_currentLine(1)
 {
-    switch (type)
+    m_keywords = {
+        {"int", TokenType::INT}, {"void", TokenType::VOID}, {"if", TokenType::IF}, {"else", TokenType::ELSE}, {"while", TokenType::WHILE}, {"break", TokenType::BREAK}, {"continue", TokenType::CONTINUE}, {"return", TokenType::RETURN}};
+}
+
+bool Lexer::isAtEnd() const
+{
+    return m_pos >= m_source.length();
+}
+
+char Lexer::currentChar() const
+{
+    return isAtEnd() ? '\0' : m_source[m_pos];
+}
+
+char Lexer::peekNextChar() const
+{
+    return (m_pos + 1 >= m_source.length()) ? '\0' : m_source[m_pos + 1];
+}
+
+void Lexer::advance()
+{
+    if (!isAtEnd())
     {
-    // 关键字
-    case TokenType::KEYWORD_INT:
-        return "'int'";
-    case TokenType::KEYWORD_VOID:
-        return "'void'";
-    case TokenType::KEYWORD_IF:
-        return "'if'";
-    case TokenType::KEYWORD_ELSE:
-        return "'else'";
-    case TokenType::KEYWORD_WHILE:
-        return "'while'";
-    case TokenType::KEYWORD_BREAK:
-        return "'break'";
-    case TokenType::KEYWORD_CONTINUE:
-        return "'continue'";
-    case TokenType::KEYWORD_RETURN:
-        return "'return'";
-
-    // 标识符和常量
-    case TokenType::IDENTIFIER:
-        return "Ident";
-    case TokenType::INT_CONST:
-        return "IntConst";
-
-    // 运算符和分隔符
-    case TokenType::PLUS:
-        return "'+'";
-    case TokenType::MINUS:
-        return "'-'";
-    case TokenType::MULTIPLY:
-        return "'*'";
-    case TokenType::DIVIDE:
-        return "'/'";
-    case TokenType::MODULO:
-        return "'%'";
-    case TokenType::ASSIGN:
-        return "'='";
-    case TokenType::EQUALS:
-        return "'=='";
-    case TokenType::NOT_EQUALS:
-        return "'!='";
-    case TokenType::LESS:
-        return "'<'";
-    case TokenType::GREATER:
-        return "'>'";
-    case TokenType::LESS_EQUAL:
-        return "'<='";
-    case TokenType::GREATER_EQUAL:
-        return "'>='";
-    case TokenType::AND:
-        return "'&&'";
-    case TokenType::OR:
-        return "'||'";
-    case TokenType::NOT:
-        return "'!'";
-
-    // 分隔符
-    case TokenType::LEFT_PAREN:
-        return "'('";
-    case TokenType::RIGHT_PAREN:
-        return "')'";
-    case TokenType::LEFT_BRACE:
-        return "'{'";
-    case TokenType::RIGHT_BRACE:
-        return "'}'";
-    case TokenType::SEMICOLON:
-        return "';'";
-    case TokenType::COMMA:
-        return "','";
-
-    default:
-        return "Unknown";
+        if (m_source[m_pos] == '\n')
+            ++m_currentLine;
+        ++m_pos;
     }
 }
 
-Lexer::Lexer(const std::string &input)
-    : input(input), pos(0), line(1), col(1)
+void Lexer::skipWhitespace()
 {
+    while (!isAtEnd() && std::isspace(static_cast<unsigned char>(currentChar())))
+        advance();
 }
 
-std::vector<Token> Lexer::tokenize()
+void Lexer::skipComments()
 {
-    std::vector<Token> tokens;
+    if (currentChar() != '/' || (peekNextChar() != '/' && peekNextChar() != '*'))
+        return;
 
+    bool isLineComment = (peekNextChar() == '/');
+    advance();
+    advance();
+
+    if (isLineComment)
+    {
+        while (!isAtEnd() && currentChar() != '\n')
+            advance();
+    }
+    else
+    {
+        while (!isAtEnd() && !(currentChar() == '*' && peekNextChar() == '/'))
+            advance();
+        if (!isAtEnd())
+        {
+            advance();
+            advance();
+        }
+    }
+}
+
+Token Lexer::consumeNumber()
+{
+    const int startLine = m_currentLine;
+    string numText;
+
+    const char first = currentChar();
+    numText += first;
+    advance();
+
+    if (first == '0')
+    {
+        if (!isAtEnd() && std::isdigit(static_cast<unsigned char>(currentChar())))
+        {
+            while (!isAtEnd() && std::isdigit(static_cast<unsigned char>(currentChar())))
+            {
+                numText += currentChar();
+                advance();
+            }
+            return makeToken(TokenType::UNKNOWN, numText, startLine);
+        }
+        return makeToken(TokenType::INTCONST, numText, startLine);
+    }
+
+    while (!isAtEnd() && std::isdigit(static_cast<unsigned char>(currentChar())))
+    {
+        numText += currentChar();
+        advance();
+    }
+
+    return makeToken(TokenType::INTCONST, numText, startLine);
+}
+
+Token Lexer::consumeIdentifier()
+{
+    const int startLine = m_currentLine;
+    string idText;
+
+    auto isIdChar = [](char c)
+    { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+
+    while (!isAtEnd() && isIdChar(currentChar()))
+    {
+        idText += currentChar();
+        advance();
+    }
+
+    auto it = m_keywords.find(idText);
+    TokenType type = (it != m_keywords.end()) ? it->second : TokenType::IDENTIFIER;
+
+    return makeToken(type, idText, startLine);
+}
+
+Token Lexer::consumeOperator()
+{
+    const int startLine = m_currentLine;
+    const char c1 = currentChar();
+    advance();
+
+    static const std::unordered_map<string, TokenType> dblOps = {
+        {"==", TokenType::EQUAL}, {"!=", TokenType::NOT_EQUAL}, {"<=", TokenType::LESS_EQUAL}, {">=", TokenType::GREATER_EQUAL}, {"&&", TokenType::AND}, {"||", TokenType::OR}};
+
+    static const std::unordered_map<char, TokenType> sglOps = {
+        {'+', TokenType::PLUS}, {'-', TokenType::MINUS}, {'*', TokenType::MULTIPLY}, {'/', TokenType::DIVIDE}, {'%', TokenType::MODULO}, {'=', TokenType::ASSIGN}, {'!', TokenType::NOT}, {'<', TokenType::LESS}, {'>', TokenType::GREATER}, {'(', TokenType::LEFT_PAREN}, {')', TokenType::RIGHT_PAREN}, {'{', TokenType::LEFT_BRACE}, {'}', TokenType::RIGHT_BRACE}, {';', TokenType::SEMICOLON}, {',', TokenType::COMMA}};
+
+    if (!isAtEnd())
+    {
+        string dblChar{c1, currentChar()};
+        auto it = dblOps.find(dblChar);
+        if (it != dblOps.end())
+        {
+            advance();
+            return makeToken(it->second, dblChar, startLine);
+        }
+    }
+
+    auto it = sglOps.find(c1);
+    TokenType type = (it != sglOps.end()) ? it->second : TokenType::UNKNOWN;
+
+    return makeToken(type, string(1, c1), startLine);
+}
+
+Token Lexer::nextToken()
+{
     while (!isAtEnd())
     {
         skipWhitespace();
         if (isAtEnd())
             break;
 
-        Token token = readNextToken();
-        if (token.type != TokenType::UNKNOWN)
+        const char c = currentChar();
+        const char n = peekNextChar();
+
+        if (c == '/' && (n == '/' || n == '*'))
         {
-            tokens.push_back(token);
+            skipComments();
+            continue;
         }
+
+        if (std::isdigit(static_cast<unsigned char>(c)))
+            return consumeNumber();
+
+        if (std::isalpha(static_cast<unsigned char>(c)) || c == '_')
+            return consumeIdentifier();
+
+        return consumeOperator();
     }
 
+    return makeToken(TokenType::END_OF_FILE, "", m_currentLine);
+}
+
+vector<Token> Lexer::getAllTokens()
+{
+    vector<Token> tokens;
+    Token token;
+    do
+    {
+        token = nextToken();
+        tokens.push_back(token);
+    } while (token.type != TokenType::END_OF_FILE);
     return tokens;
 }
 
-Token Lexer::readNextToken()
+void Lexer::output()
 {
-    char c = current();
-
-    if (isIdentifierStart(c))
+    auto tokens = getAllTokens();
+    for (const auto &t : tokens)
     {
-        return readIdentifier();
-    }
-    else if (isDigit(c))
-    {
-        return readNumber();
-    }
-    else
-    {
-        return readOperator();
+        if (t.type != TokenType::END_OF_FILE)
+        {
+            cout << t.index << ":" << typeToStr(t.type)
+                 << ":\"" << t.value << "\"" << endl;
+        }
     }
 }
 
-Token Lexer::readIdentifier()
+string Lexer::typeToStr(TokenType t) const
 {
-    int startLine = line;
-    int startCol = col;
-    std::string value;
-
-    // 读取完整的标识符
-    while (!isAtEnd() && isIdentifierPart(current()))
-    {
-        value += current();
-        advance();
-    }
-
-    // 检查是否是关键字
-    TokenType type = TokenType::IDENTIFIER;
-    if (value == "int")
-        type = TokenType::KEYWORD_INT;
-    else if (value == "void")
-        type = TokenType::KEYWORD_VOID;
-    else if (value == "if")
-        type = TokenType::KEYWORD_IF;
-    else if (value == "else")
-        type = TokenType::KEYWORD_ELSE;
-    else if (value == "while")
-        type = TokenType::KEYWORD_WHILE;
-    else if (value == "break")
-        type = TokenType::KEYWORD_BREAK;
-    else if (value == "continue")
-        type = TokenType::KEYWORD_CONTINUE;
-    else if (value == "return")
-        type = TokenType::KEYWORD_RETURN;
-
-    return Token{0, type, value, startLine, startCol};
+    static const std::map<TokenType, string> names = {
+        {TokenType::INT, "'int'"}, {TokenType::VOID, "'void'"}, {TokenType::IF, "'if'"}, {TokenType::ELSE, "'else'"}, {TokenType::WHILE, "'while'"}, {TokenType::BREAK, "'break'"}, {TokenType::CONTINUE, "'continue'"}, {TokenType::RETURN, "'return'"}, {TokenType::IDENTIFIER, "Ident"}, {TokenType::INTCONST, "IntConst"}, {TokenType::PLUS, "'+'"}, {TokenType::MINUS, "'-'"}, {TokenType::MULTIPLY, "'*'"}, {TokenType::DIVIDE, "'/'"}, {TokenType::MODULO, "'%'"}, {TokenType::ASSIGN, "'='"}, {TokenType::EQUAL, "'=='"}, {TokenType::NOT_EQUAL, "'!='"}, {TokenType::LESS, "'<'"}, {TokenType::LESS_EQUAL, "'<='"}, {TokenType::GREATER, "'>'"}, {TokenType::GREATER_EQUAL, "'>='"}, {TokenType::AND, "'&&'"}, {TokenType::OR, "'||'"}, {TokenType::NOT, "'!'"}, {TokenType::LEFT_PAREN, "'('"}, {TokenType::RIGHT_PAREN, "')'"}, {TokenType::LEFT_BRACE, "'{'"}, {TokenType::RIGHT_BRACE, "'}'"}, {TokenType::SEMICOLON, "';'"}, {TokenType::COMMA, "','"}, {TokenType::END_OF_FILE, "EOF"}};
+    auto it = names.find(t);
+    return (it != names.end()) ? it->second : "UNKNOWN";
 }
 
-Token Lexer::readNumber()
+Token Lexer::makeToken(TokenType type, const string &text, int startLine)
 {
-    int startLine = line;
-    int startCol = col;
-    std::string value;
-
-    // 读取数字部分
-    if (current() == '0')
-    {
-        value += current();
-        advance();
-        while (!isAtEnd() && isDigit(current()))
-        {
-            value += current();
-            advance();
-        }
-    }
-    else
-    {
-        // 读取非零数字
-        while (!isAtEnd() && isDigit(current()))
-        {
-            value += current();
-            advance();
-        }
-    }
-
-    return Token{0, TokenType::INT_CONST, value, startLine, startCol};
-}
-
-Token Lexer::readOperator()
-{
-    int startLine = line;
-    int startCol = col;
-    char c = current();
-    advance();
-
-    TokenType type = TokenType::UNKNOWN;
-    std::string value(1, c);
-
-    // 处理多字符运算符
-    switch (c)
-    {
-    case '=':
-        if (match('='))
-        {
-            type = TokenType::EQUALS;
-            value = "==";
-        }
-        else
-        {
-            type = TokenType::ASSIGN;
-        }
-        break;
-    case '!':
-        if (match('='))
-        {
-            type = TokenType::NOT_EQUALS;
-            value = "!=";
-        }
-        else
-        {
-            type = TokenType::NOT;
-        }
-        break;
-    case '<':
-        if (match('='))
-        {
-            type = TokenType::LESS_EQUAL;
-            value = "<=";
-        }
-        else
-        {
-            type = TokenType::LESS;
-        }
-        break;
-    case '>':
-        if (match('='))
-        {
-            type = TokenType::GREATER_EQUAL;
-            value = ">=";
-        }
-        else
-        {
-            type = TokenType::GREATER;
-        }
-        break;
-    case '&':
-        if (match('&'))
-        {
-            type = TokenType::AND;
-            value = "&&";
-        }
-        break;
-    case '|':
-        if (match('|'))
-        {
-            type = TokenType::OR;
-            value = "||";
-        }
-        break;
-    case '+':
-        type = TokenType::PLUS;
-        break;
-    case '-':
-        type = TokenType::MINUS;
-        break;
-    case '*':
-        type = TokenType::MULTIPLY;
-        break;
-    case '/':
-        type = TokenType::DIVIDE;
-        break;
-    case '%':
-        type = TokenType::MODULO;
-        break;
-    case '(':
-        type = TokenType::LEFT_PAREN;
-        break;
-    case ')':
-        type = TokenType::RIGHT_PAREN;
-        break;
-    case '{':
-        type = TokenType::LEFT_BRACE;
-        break;
-    case '}':
-        type = TokenType::RIGHT_BRACE;
-        break;
-    case ';':
-        type = TokenType::SEMICOLON;
-        break;
-    case ',':
-        type = TokenType::COMMA;
-        break;
-    default:
-        // 未知字符，保持UNKNOWN类型
-        break;
-    }
-
-    return Token{0, type, value, startLine, startCol};
-}
-
-// 获取当前字符
-char Lexer::current() const
-{
-    return pos < input.length() ? input[pos] : '\0';
-}
-
-// 向前查看字符
-char Lexer::peek(int offset) const
-{
-    size_t peekPos = pos + offset;
-    return peekPos < input.length() ? input[peekPos] : '\0';
-}
-
-// 前进一个字符
-void Lexer::advance()
-{
-    if (!isAtEnd())
-    {
-        char c = current();
-        if (c == '\r')
-        {
-            // 处理Windows换行符\r\n
-            if (peek() == '\n')
-            {
-                pos++; // 跳过\n
-            }
-            line++;
-            col = 1;
-        }
-        else if (c == '\n')
-        {
-            line++;
-            col = 1;
-        }
-        else
-        {
-            col++;
-        }
-        pos++;
-    }
-}
-
-// 检查是否到达输入末尾
-bool Lexer::isAtEnd() const
-{
-    return pos >= input.length();
-}
-
-// 匹配并消费一个字符（如果匹配）
-bool Lexer::match(char expected)
-{
-    if (isAtEnd() || current() != expected)
-    {
-        return false;
-    }
-    advance();
-    return true;
-}
-
-// 标识符起始字符
-bool Lexer::isIdentifierStart(char c)
-{
-    return (c >= 'a' && c <= 'z') ||
-           (c >= 'A' && c <= 'Z') ||
-           c == '_';
-}
-
-// 标识符后续字符
-bool Lexer::isIdentifierPart(char c)
-{
-    return isIdentifierStart(c) || (c >= '0' && c <= '9');
-}
-
-// 数字字符
-bool Lexer::isDigit(char c)
-{
-    return c >= '0' && c <= '9';
-}
-
-void Lexer::skipWhitespace()
-{
-    while (!isAtEnd())
-    {
-        char c = current();
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
-        {
-            advance();
-        }
-        else if (c == '/')
-        {
-            char next = peek();
-            if (next == '/') // 单行注释
-            {
-                advance(); // 跳过 '/'
-                advance(); // 跳过 '/'
-                while (!isAtEnd() && current() != '\n')
-                {
-                    advance();
-                }
-            }
-            else if (next == '*') // 多行注释
-            {
-                advance(); // 跳过 '/'
-                advance(); // 跳过 '*'
-                while (!isAtEnd())
-                {
-                    if (current() == '*' && peek() == '/')
-                    {
-                        advance(); // 跳过 '*'
-                        advance(); // 跳过 '/'
-                        break;
-                    }
-                    advance();
-                }
-            }
-            else
-            {
-                break; // 只是一个除号 '/'
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
+    return Token{type, text, m_tokenIdCounter++, startLine};
 }
